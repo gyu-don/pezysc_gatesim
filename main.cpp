@@ -24,7 +24,7 @@ inline void  initVector(std::vector<double>& src_re, std::vector<double>& src_im
     for (auto& s : src_im) {
         s = 0;
     }
-    src_re[0] = 0;
+    src_re[0] = 1;
 }
 
 void cpuAdd(size_t num, std::vector<double>& dst, const std::vector<double>& src0, const std::vector<double>& src1)
@@ -128,6 +128,7 @@ void pzcRun(size_t num, std::vector<double>& vec_re, std::vector<double>& vec_im
         cl::Event write_event;
         command_queue.enqueueWriteBuffer(device_vec_im, true, 0, sizeof(double) * num, &vec_im[0], 0, &write_event);
         write_event.wait();
+	std::cerr << "write_event.wait() done" << std::endl;
 
         // Create Kernel.
         // Give kernel name without pzc_ prefix.
@@ -144,6 +145,7 @@ void pzcRun(size_t num, std::vector<double>& vec_re, std::vector<double>& vec_im
         command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &event);
 
         // Waiting device completion.
+	std::cerr << "event.wait() done" << std::endl;
         event.wait();
 
         // Get dst.
@@ -152,7 +154,9 @@ void pzcRun(size_t num, std::vector<double>& vec_re, std::vector<double>& vec_im
 
         // Finish all commands.
         command_queue.flush();
+	std::cerr << "command_queue.flush() done" << std::endl;
         command_queue.finish();
+	std::cerr << "command_queue.finish() done" << std::endl;
 
     } catch (const cl::Error& e) {
         std::stringstream msg;
@@ -226,7 +230,7 @@ int main(int argc, char** argv)
     pzcRun(num, vec_re, vec_im);
 
     for(size_t i=0; i<num; i++) {
-        std::cout << "(" << vec_re[i] << " + i" << vec_im[i] << std::endl;
+        std::cout << "(" << vec_re[i] << " + i" << vec_im[i] << ")" << std::endl;
     }
     // verify
     /*

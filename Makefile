@@ -19,4 +19,4 @@ export PZC_TARGET_ARCH
 include $(DEFAULT_MAKE)
 
 run:
-	@./$(TARGET) 102400
+	@./$(TARGET) 10
