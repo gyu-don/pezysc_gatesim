@@ -1,10 +1,39 @@
 /*!
+ * @author    gyu-don
+ * @date      2019
+ * @copyright BSD-3-Clause
+ */
+/*!
+ * Original Code:
  * @author    PEZY Computing, K.K.
  * @date      2019
  * @copyright BSD-3-Clause
  */
 
 #include <pzc_builtin.h>
+
+inline void mul(double &re_dst, double &im_dst, const double &re_src, const double &im_src)
+{
+    double t = re_dst;
+    re_dst *= re_src;
+    re_dst -= im_dst * im_src;
+    im_dst *= re_src;
+    im_dst += t * im_src;
+}
+
+inline uint64_t get_idx0(uint64_t mask_target, size_t idx)
+{
+    uint64_t lower_mask = mask_target - 1;
+    uint64_t lower = idx & lower_mask;
+    uint64_t higher = (idx & ~lower_mask) << 1;
+    return higher + lower;
+}
+
+inline uint64_t get_idx1(uint64_t mask_target, size_t idx)
+{
+    return get_idx0(mask_target, idx) + mask_target;
+}
+
 
 void pzc_add(size_t        num,
              double*       dst,
@@ -21,6 +50,105 @@ void pzc_add(size_t        num,
         double s1 = src1[i];
         chgthread();
         dst[i] = s0 + s1;
+    }
+
+    flush();
+}
+
+void pzc_initvec(size_t num, double *vec_re, double *vec_im)
+{
+    size_t pid = get_pid();
+    size_t tid = get_tid();
+    size_t gid = pid * get_maxtid() + tid;
+    const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
+
+    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+        vec_re[i] = i ? 0 : 1;
+        chgthread();
+        vec_im[i] = 0;
+        chgthread();
+    }
+
+    flush();
+}
+
+void pzc_zgate(size_t num, uint64_t mask, double *vec_re, double *vec_im)
+{
+    size_t pid = get_pid();
+    size_t tid = get_tid();
+    size_t gid = pid * get_maxtid() + tid;
+    const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
+
+    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+        auto idx = get_idx1(mask, i);
+        vec_re[idx] *= -1;
+        chgthread();
+        vec_im[idx] *= -1;
+        chgthread();
+    }
+
+    flush();
+}
+
+void pzc_xgate(size_t num, uint64_t mask, double *vec_re, double *vec_im)
+{
+    size_t pid = get_pid();
+    size_t tid = get_tid();
+    size_t gid = pid * get_maxtid() + tid;
+    const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
+
+    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+        auto idx0 = get_idx0(mask, i);
+        auto idx1 = idx0 + mask;
+
+        auto t = vec_re[idx0];
+        vec_re[idx0] = vec_re[idx1];
+        vec_re[idx1] = vec_re[idx0];
+        chgthread();
+        auto u = vec_im[idx0];
+        vec_im[idx0] = vec_im[idx1];
+        vec_im[idx1] = vec_im[idx0];
+        chgthread();
+    }
+
+    flush();
+}
+
+void pzc_hgate(size_t num, uint64_t mask, double *vec_re, double *vec_im)
+{
+    size_t pid = get_pid();
+    size_t tid = get_tid();
+    size_t gid = pid * get_maxtid() + tid;
+    const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
+
+    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+        auto idx0 = get_idx0(mask, i);
+        auto idx1 = idx0 + mask;
+
+        vec_re[idx0] += vec_re[idx1];
+        vec_re[idx1] *= -2;
+        vec_re[idx1] += vec_re[idx0];
+        chgthread();
+        vec_im[idx0] += vec_im[idx1];
+        vec_im[idx1] *= -2;
+        vec_im[idx1] += vec_im[idx0];
+        chgthread();
+    }
+
+    flush();
+}
+
+void pzc_phasegate(size_t num, uint64_t mask, double angle_re, double angle_im, double *vec_re, double *vec_im)
+{
+    size_t pid = get_pid();
+    size_t tid = get_tid();
+    size_t gid = pid * get_maxtid() + tid;
+    const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
+
+    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+        auto idx = get_idx1(mask, i);
+        mul(vec_re[idx], vec_im[idx], angle_re, angle_im);
+        chgthread();
     }
 
     flush();

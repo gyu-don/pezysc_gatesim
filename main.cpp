@@ -16,12 +16,15 @@
 
 namespace {
 std::mt19937 mt(0);
-inline void  initVector(std::vector<double>& src)
+inline void  initVector(std::vector<double>& src_re, std::vector<double>& src_im)
 {
-    std::uniform_real_distribution<> rnd01(0.0, 1.0);
-    for (auto& s : src) {
-        s = rnd01(mt);
+    for (auto& s : src_re) {
+        s = 0;
     }
+    for (auto& s : src_im) {
+        s = 0;
+    }
+    src_re[0] = 0;
 }
 
 void cpuAdd(size_t num, std::vector<double>& dst, const std::vector<double>& src0, const std::vector<double>& src1)
@@ -71,7 +74,7 @@ cl::Program createProgram(cl::Context& context, const cl::Device& device, const 
     return createProgram(context, devices, filename);
 }
 
-void pzcAdd(size_t num, std::vector<double>& dst, const std::vector<double>& src0, const std::vector<double>& src1)
+void pzcRun(size_t num, std::vector<double>& vec_re, std::vector<double>& vec_im)
 {
     try {
         // Get Platform
@@ -96,30 +99,6 @@ void pzcAdd(size_t num, std::vector<double>& dst, const std::vector<double>& src
         // Load compiled binary file and create cl::Program object.
         auto program = createProgram(context, device, "kernel/kernel.pz");
 
-        // Create Kernel.
-        // Give kernel name without pzc_ prefix.
-        auto kernel = cl::Kernel(program, "add");
-
-        // Create Buffers.
-        auto device_src0 = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(double) * num);
-        auto device_src1 = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(double) * num);
-        auto device_dst  = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(double) * num);
-
-        // Send src.
-        command_queue.enqueueWriteBuffer(device_src0, true, 0, sizeof(double) * num, &src0[0]);
-        command_queue.enqueueWriteBuffer(device_src1, true, 0, sizeof(double) * num, &src1[0]);
-
-        // Clear dst.
-        cl::Event write_event;
-        command_queue.enqueueFillBuffer(device_dst, 0, 0, sizeof(double) * num, nullptr, &write_event);
-        write_event.wait();
-
-        // Set kernel args.
-        kernel.setArg(0, num);
-        kernel.setArg(1, device_dst);
-        kernel.setArg(2, device_src0);
-        kernel.setArg(3, device_src1);
-
         // Get workitem size.
         // sc1-64: 8192  (1024 PEs * 8 threads)
         // sc2   : 15782 (1984 PEs * 8 threads)
@@ -140,6 +119,26 @@ void pzcAdd(size_t num, std::vector<double>& dst, const std::vector<double>& src
             std::cout << "workitem   : " << global_work_size << std::endl;
         }
 
+        // Create Buffers.
+        auto device_vec_re = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(double) * num);
+        auto device_vec_im = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(double) * num);
+
+        // Send src.
+        command_queue.enqueueWriteBuffer(device_vec_re, true, 0, sizeof(double) * num, &vec_re[0]);
+        cl::Event write_event;
+        command_queue.enqueueWriteBuffer(device_vec_im, true, 0, sizeof(double) * num, &vec_im[0], &write_event);
+        write_event.wait();
+
+        // Create Kernel.
+        // Give kernel name without pzc_ prefix.
+        auto hgate = cl::Kernel(program, "hgate");
+        uint64_t mask = 1 << 2;
+        // Set kernel args.
+        hgate.setArg(0, num);
+        hgate.setArg(1, mask);
+        hgate.setArg(2, device_vec_re);
+        hgate.setArg(3, device_vec_im);
+
         // Run device kernel.
         cl::Event event;
         command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &event);
@@ -148,7 +147,8 @@ void pzcAdd(size_t num, std::vector<double>& dst, const std::vector<double>& src
         event.wait();
 
         // Get dst.
-        command_queue.enqueueReadBuffer(device_dst, true, 0, sizeof(double) * num, &dst[0]);
+        command_queue.enqueueReadBuffer(device_vec_re, true, 0, sizeof(double) * num, &vec_re[0]);
+        command_queue.enqueueReadBuffer(device_vec_im, true, 0, sizeof(double) * num, &vec_im[0]);
 
         // Finish all commands.
         command_queue.flush();
@@ -160,6 +160,30 @@ void pzcAdd(size_t num, std::vector<double>& dst, const std::vector<double>& src
         throw std::runtime_error(msg.str());
     }
 }
+
+/*
+bool chk(const std::vector<double>& re, const std::vector<double>& im)
+{
+    assert(actual.size() == expected.size());
+
+    bool   is_true     = true;
+    size_t error_count = 0;
+
+    const size_t num = actual.size();
+    for (size_t i = 0; i < num; ++i) {
+        if (fabs(actual[i] - expected[i]) > 1.e-7) {
+
+            if (error_count < 10) {
+                std::cerr << "# ERROR " << i << " " << actual[i] << " " << expected[i] << std::endl;
+            }
+            error_count++;
+            is_true = false;
+        }
+    }
+
+    return is_true;
+}
+*/
 
 bool verify(const std::vector<double>& actual, const std::vector<double>& expected)
 {
@@ -189,31 +213,29 @@ int main(int argc, char** argv)
     size_t num = 1024;
 
     if (argc > 1) {
-        num = strtol(argv[1], nullptr, 10);
+        num = 1 << strtol(argv[1], nullptr, 10);
     }
 
     std::cout << "num " << num << std::endl;
 
-    std::vector<double> src0(num);
-    std::vector<double> src1(num);
-    initVector(src0);
-    initVector(src1);
-
-    std::vector<double> dst_sc(num, 0);
-    std::vector<double> dst_cpu(num, 0);
-
-    // run cpu add
-    cpuAdd(num, dst_cpu, src0, src1);
+    std::vector<double> vec_re(num);
+    std::vector<double> vec_im(num);
+    initVector(vec_re, vec_im);
 
     // run device add
-    pzcAdd(num, dst_sc, src0, src1);
+    pzcRun(num, vec_re, vec_im);
 
+    for(int i=0; i<num; i++) {
+        std::cout << "(" << vec_re[i] << " + i" << vec_im[i] << std::endl;
+    }
     // verify
-    if (verify(dst_sc, dst_cpu)) {
+    /*
+    if (chk(vec_re, vec_im)) {
         std::cout << "PASS" << std::endl;
     } else {
         std::cout << "FAIL" << std::endl;
     }
+    */
 
     return 0;
 }
