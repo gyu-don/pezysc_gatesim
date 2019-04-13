@@ -45,7 +45,7 @@ struct Params {
 };
 
 namespace {
-    std::mt19937 mt(0);
+    std::mt19937 mt(1);
     inline void  initVector(std::vector<double>& src_re, std::vector<double>& src_im)
     {
         for (auto& s : src_re) {
@@ -104,7 +104,7 @@ namespace {
         return createProgram(context, devices, filename);
     }
 
-    std::vector<int> pzcRun(int n_qubits, const std::vector<Params>& ops)
+    std::vector<int> pzcRun(int n_qubits, std::vector<Params>& ops)
     {
         auto measured = std::vector<int>(n_qubits);
         size_t num = 1 << n_qubits;
@@ -233,7 +233,9 @@ namespace {
                         kernel.setArg(3, device_vec_im);
                         kernel.setArg(4, device_p0);
                         command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
+                        op.phi = 1.2345;
                         command_queue.enqueueReadBuffer(device_p0, true, 0, sizeof(double), &op.phi);
+                        std::cerr << "p0: " << op.phi << std::endl;
                         if (op.gate == P0) break;
                         if (op.gate == M) {
                             std::uniform_real_distribution<> rnd01(0.0, 1.0);
@@ -338,8 +340,10 @@ int main(int argc, char** argv)
     std::cout << "n_qubits " << n_qubits << std::endl;
 
     std::vector<Params> ops;
-    ops.push_back(Params(H, 0));
-    ops.push_back(Params(M, 0));
+    ops.push_back(Params(X, 0));
+    ops.push_back(Params(X, 1));
+    ops.push_back(Params(M_VAL, 0, 0.5));
+    ops.push_back(Params(M_VAL, 1, 0.5));
 
     // run device add
     auto vec = pzcRun(n_qubits, ops);
@@ -347,6 +351,9 @@ int main(int argc, char** argv)
         std::cout << v;
     }
     std::cout << std::endl;
+    for (int i = 2; i < 4; i++) {
+	    std::cout << "rand: " << ops[i].theta << " p0: " << ops[i].phi << std::endl;
+    }
 
     /*
     for(size_t i=0; i < num; i++) {
