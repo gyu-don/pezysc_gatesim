@@ -104,9 +104,9 @@ namespace {
         return createProgram(context, devices, filename);
     }
 
-    std::vector<int> pzcRun(int n_qubits, std::vector<double>& vec_re, std::vector<double>& vec_im, const std::vector<Params>& ops)
+    std::vector<int> pzcRun(int n_qubits, const std::vector<Params>& ops)
     {
-        auto measured(n_qubits);
+        auto measured = std::vector<int>(n_qubits);
         size_t num = 1 << n_qubits;
         try {
             // Get Platform
@@ -233,20 +233,20 @@ namespace {
                         kernel.setArg(3, device_vec_im);
                         kernel.setArg(4, device_p0);
                         command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
-                        command_queue.enqueueReadBuffer(device_p0, true, 0, sizeof(double), &params.phi);
+                        command_queue.enqueueReadBuffer(device_p0, true, 0, sizeof(double), &op.phi);
                         if (op.gate == P0) break;
                         if (op.gate == M) {
                             std::uniform_real_distribution<> rnd01(0.0, 1.0);
-                            params.theta = rnd01(mt);
+                            op.theta = rnd01(mt);
                         }
-                        if (params.phi < params.theta) {
+                        if (op.phi < op.theta) {
                             auto kernel = cl::Kernel(program, "collapse_to_0");
                             measured[op.target] = 0;
                             kernel.setArg(0, num);
                             kernel.setArg(1, 1 << op.target);
                             kernel.setArg(2, device_vec_re);
                             kernel.setArg(3, device_vec_im);
-                            kernel.setArg(4, params.phi);
+                            kernel.setArg(4, op.phi);
                             command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
                         }
                         else {
@@ -256,7 +256,7 @@ namespace {
                             kernel.setArg(1, 1 << op.target);
                             kernel.setArg(2, device_vec_re);
                             kernel.setArg(3, device_vec_im);
-                            kernel.setArg(4, params.phi);
+                            kernel.setArg(4, op.phi);
                             command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
                         }
                         break;
@@ -337,21 +337,16 @@ int main(int argc, char** argv)
 
     std::cout << "n_qubits " << n_qubits << std::endl;
 
-    std::vector<double> vec_re(num);
-    std::vector<double> vec_im(num);
-    initVector(vec_re, vec_im);
-
     std::vector<Params> ops;
-
     ops.push_back(Params(H, 0));
     ops.push_back(Params(M, 0));
 
     // run device add
-    auto vec = pzcRun(n_qubits, vec_re, vec_im, ops);
+    auto vec = pzcRun(n_qubits, ops);
     for (auto v : vec) {
         std::cout << v;
     }
-    std::endl;
+    std::cout << std::endl;
 
     /*
     for(size_t i=0; i < num; i++) {
