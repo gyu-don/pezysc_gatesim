@@ -186,7 +186,6 @@ void pzc_phasegate(size_t num, uint64_t mask, double angle_re, double angle_im, 
     for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
         auto idx = get_idx1(mask, i);
         mul(vec_re[idx], vec_im[idx], angle_re, angle_im);
-        chgthread();
     }
 
     flush();
@@ -204,9 +203,7 @@ void pzc_czgate(size_t num, uint64_t cmask, uint64_t tmask, double *vec_re, doub
     for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
         auto idx = get_idx11(cmask, tmask, i);
         vec_re[idx] *= -1;
-        chgthread();
         vec_im[idx] *= -1;
-        chgthread();
     }
 
     flush();
@@ -226,14 +223,78 @@ void pzc_cxgate(size_t num, uint64_t cmask, uint64_t tmask, double *vec_re, doub
         auto idx11 = idx10 + tmask;
 
         auto t = vec_re[idx10];
-        vec_re[idx10] = vec_re[idx11];
-        vec_re[idx11] = t;
-        chgthread();
         auto u = vec_im[idx10];
-        vec_im[idx10] = vec_im[idx11];
-        vec_im[idx11] = u;
         chgthread();
+        vec_re[idx10] = vec_re[idx11];
+        vec_im[idx10] = vec_im[idx11];
+        chgthread();
+        vec_re[idx11] = t;
+        vec_im[idx11] = u;
     }
 
+    flush();
+}
+
+void pzc_p0_base8(double *p0, size_t num, uint64_t cmask, uint64_t tmask, const double *vec_re, const double *vec_im)
+{
+    size_t       pid              = get_pid();
+    size_t       tid              = get_tid();
+    size_t       gid              = pid * get_maxtid() + tid;
+    const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
+
+    num >>= 1;
+    // Result == Sum of data[0..num-1]
+    {
+        double acc = 0.0;
+        for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+            size_t idx0 = get_idx0(mask, i);
+            double re = vec_re[idx0];
+            double im = vec_im[idx0];
+            chgthread();
+            val = re * re + im * im;
+            acc += val;
+        }
+        shared[gid] = acc;
+    }
+    flush();
+
+    // Result == Sum of shared[0..GLOBAL_WORK_SIZE-1]
+    size_t base = 1;
+    while (base * 8 < GLOBAL_WORK_SIZE)
+        base *= 8;
+
+    // when GLOBAL_WORK_SIZE is not power of 8
+    if (base * 8 != GLOBAL_WORK_SIZE) {
+        if (gid < base) {
+            double acc = 0.0;
+            for (int i = gid; i < GLOBAL_WORK_SIZE; i += base) {
+                acc += shared[i];
+                chgthread();
+            }
+            shared[gid] = acc;
+        }
+        flush();
+        base /= 8;
+    }
+
+    // Result == Sum of shared[0..base*8-1]
+    while (base > 0) {
+        if (gid < base) {
+            double acc = 0.0;
+            for (int i = 0; i < 8; i++) {
+                acc += shared[base * i + gid];
+            }
+            shared[gid] = acc;
+        }
+        if (base > THREAD_IN_CITY)
+            flush();
+        else
+            flush_L2();
+        base /= 8;
+    }
+
+    if (gid == 0) {
+        *p0 = shared[0];
+    }
     flush();
 }
