@@ -12,6 +12,29 @@
 
 #include <pzc_builtin.h>
 
+// Define temporary shared buffer
+#if defined(__pezy_sc__)
+static double shared[8192]; // 8 * 1024
+#elif defined(__pezy_sc2__)
+static double shared[16384]; // 8 * 2048
+#else
+#    error "Unknown architecture"
+#endif
+
+#define THREAD_IN_CITY 128
+#define THREAD_IN_PE 8
+
+void pzc_flush_LLC()
+{
+    // In the SC2, the flush() function does not purge contents of the LLC.
+    // To assume the LLC is empty, we do some magic
+#if defined(__pezy_sc2__)
+    __builtin_pz_flush_lv(7);
+#else
+    flush();
+#endif
+}
+
 inline void mul(double &re_dst, double &im_dst, const double &re_src, const double &im_src)
 {
     double t = re_dst;
