@@ -34,6 +34,36 @@ inline uint64_t get_idx1(uint64_t mask_target, size_t idx)
     return get_idx0(mask_target, idx) + mask_target;
 }
 
+inline uint64_t get_idx00(uint64_t mask_control, uint64_t mask_target, size_t idx)
+{
+    uint64_t idx00;
+    if (mask_control > mask_target) {
+        uint64_t tmp = mask_target;
+        mask_target = mask_control;
+        mask_control = tmp;
+    }
+    uint64_t lower_mask = mask_control - 1;
+    idx00 = (uint64_t)idx & lower_mask;
+    uint64_t finished_mask = lower_mask + mask_control;
+    idx <<= 1;
+    uint64_t middle_mask = (mask_target - 1) & ~finished_mask;
+    idx00 += (uint64_t)idx & middle_mask;
+    finished_mask += mask_target + middle_mask;
+    idx <<= 1;
+    uint64_t higher_mask = ~finished_mask;
+    idx00 += (uint64_t)idx & higher_mask;
+    return idx00;
+}
+
+inline uint64_t get_idx10(uint64_t mask_control, uint64_t mask_target, size_t idx)
+{
+    return get_idx00(mask_control, mask_target, idx) + mask_control;
+}
+
+inline uint64_t get_idx11(uint64_t mask_control, uint64_t mask_target, size_t idx)
+{
+    return get_idx00(mask_control, mask_target, idx) + mask_control + mask_target;
+}
 
 void pzc_add(size_t        num,
              double*       dst,
@@ -131,8 +161,6 @@ void pzc_hgate(size_t num, uint64_t mask, double *vec_re, double *vec_im)
 
         double t0 = vec_re[idx0];
         double t1 = vec_re[idx1];
-        vec_re[idx0] = -1;
-        vec_re[idx1] = -2;
         vec_re[idx0] = (t0 + t1) * sqrt2inv;
         vec_re[idx1] = (t0 - t1) * sqrt2inv;
         chgthread();
@@ -156,6 +184,26 @@ void pzc_phasegate(size_t num, uint64_t mask, double angle_re, double angle_im, 
     for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
         auto idx = get_idx1(mask, i);
         mul(vec_re[idx], vec_im[idx], angle_re, angle_im);
+        chgthread();
+    }
+
+    flush();
+}
+
+void pzc_czgate(size_t num, uint64_t cmask, uint64_t tmask, double *vec_re, double *vec_im)
+{
+    size_t pid = get_pid();
+    size_t tid = get_tid();
+    size_t gid = pid * get_maxtid() + tid;
+    const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
+
+    size >>= 2;
+
+    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+        auto idx = get_idx11(cmask, tmask, i);
+        vec_re[idx] *= -1;
+        chgthread();
+        vec_im[idx] *= -1;
         chgthread();
     }
 
