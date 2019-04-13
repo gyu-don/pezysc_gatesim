@@ -130,23 +130,26 @@ void pzcRun(size_t num, std::vector<double>& vec_re, std::vector<double>& vec_im
         write_event.wait();
 	std::cerr << "write_event.wait() done" << std::endl;
 
-        // Create Kernel.
-        // Give kernel name without pzc_ prefix.
-        auto hgate = cl::Kernel(program, "hgate");
-        uint64_t mask = 1 << 2;
-        // Set kernel args.
-        hgate.setArg(0, num);
-        hgate.setArg(1, mask);
-        hgate.setArg(2, device_vec_re);
-        hgate.setArg(3, device_vec_im);
+	//cl::Event event;
+	for(uint64_t mask = 1; mask < num; mask <<= 1) {
+            // Create Kernel.
+            // Give kernel name without pzc_ prefix.
+            auto hgate = cl::Kernel(program, "hgate");
+            std::cerr << "mask:" << mask << " num:" << num << std::endl;
+            // Set kernel args.
+            hgate.setArg(0, num);
+            hgate.setArg(1, mask);
+            hgate.setArg(2, device_vec_re);
+            hgate.setArg(3, device_vec_im);
 
-        // Run device kernel.
-        cl::Event event;
-        command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &event);
+            // Run device kernel.
+            //command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &event);
+            command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, nullptr);
+        }
 
         // Waiting device completion.
-	std::cerr << "event.wait() done" << std::endl;
-        event.wait();
+        //event.wait();
+	//std::cerr << "event.wait() done" << std::endl;
 
         // Get dst.
         command_queue.enqueueReadBuffer(device_vec_re, true, 0, sizeof(double) * num, &vec_re[0]);
@@ -230,7 +233,7 @@ int main(int argc, char** argv)
     pzcRun(num, vec_re, vec_im);
 
     for(size_t i=0; i<num; i++) {
-        std::cout << "(" << vec_re[i] << " + i" << vec_im[i] << ")" << std::endl;
+        std::cout << i << "\t(" << vec_re[i] << " + i" << vec_im[i] << ")" << std::endl;
     }
     // verify
     /*

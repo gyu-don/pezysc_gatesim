@@ -24,8 +24,8 @@ inline void mul(double &re_dst, double &im_dst, const double &re_src, const doub
 inline uint64_t get_idx0(uint64_t mask_target, size_t idx)
 {
     uint64_t lower_mask = mask_target - 1;
-    uint64_t lower = idx & lower_mask;
-    uint64_t higher = (idx & ~lower_mask) << 1;
+    uint64_t lower = (uint64_t)idx & lower_mask;
+    uint64_t higher = ((uint64_t)idx & ~lower_mask) << 1;
     return higher + lower;
 }
 
@@ -121,17 +121,25 @@ void pzc_hgate(size_t num, uint64_t mask, double *vec_re, double *vec_im)
     size_t gid = pid * get_maxtid() + tid;
     const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
 
-    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
-        auto idx0 = get_idx0(mask, i);
-        auto idx1 = idx0 + mask;
+    double sqrt2inv = 1.0 / sqrt(2.0);
 
-        vec_re[idx0] += vec_re[idx1];
-        vec_re[idx1] *= -2;
-        vec_re[idx1] += vec_re[idx0];
+    num >>= 1;
+
+    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+        size_t idx0 = get_idx0(mask, i);
+        size_t idx1 = idx0 + mask;
+
+        double t0 = vec_re[idx0];
+        double t1 = vec_re[idx1];
+        vec_re[idx0] = -1;
+        vec_re[idx1] = -2;
+        vec_re[idx0] = (t0 + t1) * sqrt2inv;
+        vec_re[idx1] = (t0 - t1) * sqrt2inv;
         chgthread();
-        vec_im[idx0] += vec_im[idx1];
-        vec_im[idx1] *= -2;
-        vec_im[idx1] += vec_im[idx0];
+        double u0 = vec_im[idx0];
+        double u1 = vec_im[idx1];
+        vec_im[idx0] = (u0 + u1) * sqrt2inv;
+        vec_im[idx1] = (u0 - u1) * sqrt2inv;
         chgthread();
     }
 
