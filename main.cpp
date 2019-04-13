@@ -42,7 +42,7 @@ struct Params {
     double theta;
     Params(int g, int t, int c = -1) : gate(g), target(t), ctrl(c) {}
     Params(int g, int t, double theta = 0., double phi = 0., double lambda = 0.) : gate(g), target(t), theta(theta), phi(phi), lambda(lambda) {}
-}
+};
 
 namespace {
     std::mt19937 mt(0);
