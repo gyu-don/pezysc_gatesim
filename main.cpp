@@ -20,6 +20,30 @@
 #include <stdexcept>
 #include <vector>
 
+enum Gate {
+    H = 1,
+    X,
+    Z,
+    CX,
+    CZ,
+    PHASE,
+    M,
+    M_VAL,
+    P0,
+}
+
+struct Params {
+    int gate;
+    int target;
+    int ctrl;
+    int sampl;
+    double lambda;
+    double phi;
+    double theta;
+    Params(int g, int t, int c = -1) : gate(g), target(t), ctrl(c) {}
+    Params(int g, int t, double theta = 0., double phi = 0., double lambda = 0.) : gate(g), target(t), theta(theta), phi(phi), lambda(lambda) {}
+}
+
 namespace {
     std::mt19937 mt(0);
     inline void  initVector(std::vector<double>& src_re, std::vector<double>& src_im)
@@ -80,8 +104,9 @@ namespace {
         return createProgram(context, devices, filename);
     }
 
-    void pzcRun(size_t num, std::vector<double>& vec_re, std::vector<double>& vec_im)
+    void pzcRun(int n_qubits std::vector<double>& vec_re, std::vector<double>& vec_im, const std::vector<Params>& ops)
     {
+        size_t num = 1 << n_qubits;
         try {
             // Get Platform
             std::vector<cl::Platform> platforms;
@@ -128,54 +153,116 @@ namespace {
             // Create Buffers.
             auto device_vec_re = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(double) * num);
             auto device_vec_im = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(double) * num);
+            auto device_p0 = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(double));
 
             // Send src.
-            command_queue.enqueueWriteBuffer(device_vec_re, true, 0, sizeof(double) * num, &vec_re[0]);
-            cl::Event write_event;
-            command_queue.enqueueWriteBuffer(device_vec_im, true, 0, sizeof(double) * num, &vec_im[0], 0, &write_event);
-            write_event.wait();
-            std::cerr << "write_event.wait() done" << std::endl;
+            // command_queue.enqueueWriteBuffer(device_vec_re, true, 0, sizeof(double) * num, &vec_re[0]);
+            // cl::Event write_event;
+            // command_queue.enqueueWriteBuffer(device_vec_im, true, 0, sizeof(double) * num, &vec_im[0], 0, &write_event);
+            // write_event.wait();
+            // std::cerr << "write_event.wait() done" << std::endl;
+            auto kernel = cl::Kernel(program, "initvec");
+            kernel.setArg(0, num);
+            kernel.setArg(1, device_vec_re);
+            kernel.setArg(2, device_vec_im);
+            command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
 
-            //cl::Event event;
-            for(uint64_t mask = 1; mask < num; mask <<= 2) {
-                // Create Kernel.
-                // Give kernel name without pzc_ prefix.
-                auto hgate = cl::Kernel(program, "hgate");
-                std::cerr << "mask:" << mask << " num:" << num << std::endl;
-                // Set kernel args.
-                hgate.setArg(0, num);
-                hgate.setArg(1, mask);
-                hgate.setArg(2, device_vec_re);
-                hgate.setArg(3, device_vec_im);
-
-                // Run device kernel.
-                //command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &event);
-                cl::Event ev;
-                command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &ev);
-                ev.wait();
-                // Create Kernel.
-                // Give kernel name without pzc_ prefix.
-                auto cxgate = cl::Kernel(program, "cxgate");
-                // Set kernel args.
-                cxgate.setArg(0, num);
-                cxgate.setArg(1, mask);
-                cxgate.setArg(2, mask << 1);
-                cxgate.setArg(3, device_vec_re);
-                cxgate.setArg(4, device_vec_im);
-
-                // Run device kernel.
-                //command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &event);
-                command_queue.enqueueNDRangeKernel(cxgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &ev);
-                ev.wait();
+            for (auto op : ops) {
+                switch (op.gate) {
+                    case H:
+                    {
+                        auto kernel = cl::Kernel(program, "hgate");
+                        kernel.setArg(0, num);
+                        kernel.setArg(1, 1 << op.target);
+                        kernel.setArg(2, device_vec_re);
+                        kernel.setArg(3, device_vec_im);
+                        command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
+                        break;
+                    }
+                    case X:
+                    {
+                        auto kernel = cl::Kernel(program, "xgate");
+                        kernel.setArg(0, num);
+                        kernel.setArg(1, 1 << op.target);
+                        kernel.setArg(2, device_vec_re);
+                        kernel.setArg(3, device_vec_im);
+                        command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
+                        break;
+                    }
+                    case Z:
+                    {
+                        auto kernel = cl::Kernel(program, "zgate");
+                        kernel.setArg(0, num);
+                        kernel.setArg(1, 1 << op.target);
+                        kernel.setArg(2, device_vec_re);
+                        kernel.setArg(3, device_vec_im);
+                        command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
+                        break;
+                    }
+                    case CX:
+                    {
+                        auto kernel = cl::Kernel(program, "cxgate");
+                        kernel.setArg(0, num);
+                        kernel.setArg(1, 1 << op.target);
+                        kernel.setArg(2, 1 << op.ctrl);
+                        kernel.setArg(3, device_vec_re);
+                        kernel.setArg(4, device_vec_im);
+                        command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
+                        break;
+                    }
+                    case CZ:
+                    {
+                        auto kernel = cl::Kernel(program, "czgate");
+                        kernel.setArg(0, num);
+                        kernel.setArg(1, 1 << op.target);
+                        kernel.setArg(2, 1 << op.ctrl);
+                        kernel.setArg(3, device_vec_re);
+                        kernel.setArg(4, device_vec_im);
+                        command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
+                        break;
+                    }
+                    case P0:
+                    case M:
+                    case M_VAL:
+                    {
+                        auto kernel = cl::Kernel(program, "p0_base8");
+                        kernel.setArg(0, num);
+                        kernel.setArg(1, 1 << op.target);
+                        kernel.setArg(2, device_vec_re);
+                        kernel.setArg(3, device_vec_im);
+                        kernel.setArg(4, device_p0);
+                        command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
+                        command_queue.enqueueReadBuffer(device_p0, true, 0, sizeof(double), &params.phi);
+                        if (op.gate == P0) break;
+                        if (op.gate == M) {
+                            std::uniform_real_distribution<> rnd01(0.0, 1.0);
+                            params.theta = rnd01(mt);
+                        }
+                        if (params.phi < params.theta) {
+                            auto kernel = cl::Kernel(program, "collapse_to_0");
+                            kernel.setArg(0, num);
+                            kernel.setArg(1, 1 << op.target);
+                            kernel.setArg(2, device_vec_re);
+                            kernel.setArg(3, device_vec_im);
+                            kernel.setArg(4, params.phi);
+                            command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
+                        }
+                        else {
+                            auto kernel = cl::Kernel(program, "collapse_to_1");
+                            kernel.setArg(0, num);
+                            kernel.setArg(1, 1 << op.target);
+                            kernel.setArg(2, device_vec_re);
+                            kernel.setArg(3, device_vec_im);
+                            kernel.setArg(4, params.phi);
+                            command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
+                        }
+                        break;
+                    }
+                }
             }
-
-            // Waiting device completion.
-            //event.wait();
-            //std::cerr << "event.wait() done" << std::endl;
-
             // Get dst.
-            command_queue.enqueueReadBuffer(device_vec_re, true, 0, sizeof(double) * num, &vec_re[0]);
-            command_queue.enqueueReadBuffer(device_vec_im, true, 0, sizeof(double) * num, &vec_im[0]);
+            //command_queue.enqueueReadBuffer(device_vec_re, true, 0, sizeof(double) * num, &vec_re[0]);
+            //command_queue.enqueueReadBuffer(device_vec_im, true, 0, sizeof(double) * num, &vec_im[0]);
 
             // Finish all commands.
             command_queue.flush();
@@ -239,24 +326,35 @@ namespace {
 
 int main(int argc, char** argv)
 {
-    size_t num = 1024;
+    size_t n_qubits = 10;
 
     if (argc > 1) {
-        num = 1 << strtol(argv[1], nullptr, 10);
+        n_qubits = strtol(argv[1], nullptr, 10);
     }
 
-    std::cout << "num " << num << std::endl;
+    std::cout << "n_qubits " << n_qubits << std::endl;
 
     std::vector<double> vec_re(num);
     std::vector<double> vec_im(num);
     initVector(vec_re, vec_im);
 
-    // run device add
-    pzcRun(num, vec_re, vec_im);
+    std::vector<Params> ops;
 
-    for(size_t i=0; i<num; i++) {
+    ops.push_back(Params(H, 0));
+    ops.push_back(Params(M, 0));
+
+    // run device add
+    auto vec = pzcRun(n_qubits, vec_re, vec_im, ops);
+    for (auto v : vec) {
+        std::cout << v;
+    }
+    std::endl;
+
+    /*
+    for(size_t i=0; i < num; i++) {
         std::cout << i << "\t(" << vec_re[i] << " + i" << vec_im[i] << ")" << std::endl;
     }
+    */
     // verify
     /*
        if (chk(vec_re, vec_im)) {

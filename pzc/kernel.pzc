@@ -94,9 +94,7 @@ void pzc_initvec(size_t num, double *vec_re, double *vec_im)
 
     for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
         vec_re[i] = i ? 0 : 1;
-        chgthread();
         vec_im[i] = 0;
-        chgthread();
     }
 
     flush();
@@ -235,7 +233,7 @@ void pzc_cxgate(size_t num, uint64_t cmask, uint64_t tmask, double *vec_re, doub
     flush();
 }
 
-void pzc_p0_base8(double *p0, size_t num, uint64_t mask, const double *vec_re, const double *vec_im)
+void pzc_p0_base8(size_t num, uint64_t mask, const double *vec_re, const double *vec_im, double *p0)
 {
     size_t       pid              = get_pid();
     size_t       tid              = get_tid();
@@ -299,7 +297,7 @@ void pzc_p0_base8(double *p0, size_t num, uint64_t mask, const double *vec_re, c
     flush();
 }
 
-void pzc_collapse_to_0(size_t num, uint64_t mask, double p0, double *vec_re, double *vec_im)
+void pzc_collapse_to_0(size_t num, uint64_t mask, double *vec_re, double *vec_im, double p0)
 {
     size_t pid = get_pid();
     size_t tid = get_tid();
@@ -321,7 +319,7 @@ void pzc_collapse_to_0(size_t num, uint64_t mask, double p0, double *vec_re, dou
     flush();
 }
 
-void pzc_collapse_to_1(size_t num, uint64_t mask, double p0, double *vec_re, double *vec_im)
+void pzc_collapse_to_1(size_t num, uint64_t mask, double *vec_re, double *vec_im, double p0)
 {
     size_t pid = get_pid();
     size_t tid = get_tid();
