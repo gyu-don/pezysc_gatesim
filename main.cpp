@@ -126,7 +126,7 @@ void pzcRun(size_t num, std::vector<double>& vec_re, std::vector<double>& vec_im
         // Send src.
         command_queue.enqueueWriteBuffer(device_vec_re, true, 0, sizeof(double) * num, &vec_re[0]);
         cl::Event write_event;
-        command_queue.enqueueWriteBuffer(device_vec_im, true, 0, sizeof(double) * num, &vec_im[0], &write_event);
+        command_queue.enqueueWriteBuffer(device_vec_im, true, 0, sizeof(double) * num, &vec_im[0], 0, &write_event);
         write_event.wait();
 
         // Create Kernel.
@@ -141,7 +141,7 @@ void pzcRun(size_t num, std::vector<double>& vec_re, std::vector<double>& vec_im
 
         // Run device kernel.
         cl::Event event;
-        command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &event);
+        command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &event);
 
         // Waiting device completion.
         event.wait();
@@ -225,7 +225,7 @@ int main(int argc, char** argv)
     // run device add
     pzcRun(num, vec_re, vec_im);
 
-    for(int i=0; i<num; i++) {
+    for(size_t i=0; i<num; i++) {
         std::cout << "(" << vec_re[i] << " + i" << vec_im[i] << std::endl;
     }
     // verify
