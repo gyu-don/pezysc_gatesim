@@ -235,7 +235,7 @@ void pzc_cxgate(size_t num, uint64_t cmask, uint64_t tmask, double *vec_re, doub
     flush();
 }
 
-void pzc_p0_base8(double *p0, size_t num, uint64_t cmask, uint64_t tmask, const double *vec_re, const double *vec_im)
+void pzc_p0_base8(double *p0, size_t num, uint64_t mask, const double *vec_re, const double *vec_im)
 {
     size_t       pid              = get_pid();
     size_t       tid              = get_tid();
@@ -296,5 +296,49 @@ void pzc_p0_base8(double *p0, size_t num, uint64_t cmask, uint64_t tmask, const 
     if (gid == 0) {
         *p0 = shared[0];
     }
+    flush();
+}
+
+void pzc_collapse_to_0(size_t num, uint64_t mask, double p0, double *vec_re, double *vec_im)
+{
+    size_t pid = get_pid();
+    size_t tid = get_tid();
+    size_t gid = pid * get_maxtid() + tid;
+    const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
+    double factor = 1.0 / sqrt(p0);
+
+    size >>= 1;
+
+    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+        auto idx0 = get_idx0(mask, i);
+        auto idx1 = idx0 + mask;
+        vec_re[idx0] *= factor;
+        vec_re[idx1] = 0;
+        vec_im[idx0] *= factor;
+        vec_im[idx1] = 0;
+    }
+
+    flush();
+}
+
+void pzc_collapse_to_1(size_t num, uint64_t mask, double p0, double *vec_re, double *vec_im)
+{
+    size_t pid = get_pid();
+    size_t tid = get_tid();
+    size_t gid = pid * get_maxtid() + tid;
+    const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
+    double factor = 1.0 / (1 - sqrt(p0));
+
+    size >>= 1;
+
+    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+        auto idx0 = get_idx0(mask, i);
+        auto idx1 = idx0 + mask;
+        vec_re[idx1] *= factor;
+        vec_re[idx0] = 0;
+        vec_im[idx1] *= factor;
+        vec_im[idx0] = 0;
+    }
+
     flush();
 }
