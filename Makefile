@@ -1,7 +1,7 @@
 PZSDK_PATH?=/opt/pzsdk.ver4.1
 DEFAULT_MAKE=$(PZSDK_PATH)/make/default_pzcl_host.mk
 
-TARGET=pzcAdd
+TARGET=pzcGate
 CPPSRC=main.cpp
 CCOPT=-O2 -Wall -D__LINUX__ -DNDEBUG -std=c++11
 
