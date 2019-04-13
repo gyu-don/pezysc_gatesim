@@ -174,7 +174,7 @@ namespace {
                     {
                         auto kernel = cl::Kernel(program, "hgate");
                         kernel.setArg(0, num);
-                        kernel.setArg(1, 1 << op.target);
+                        kernel.setArg(1, (uint64_t)1 << op.target);
                         kernel.setArg(2, device_vec_re);
                         kernel.setArg(3, device_vec_im);
                         command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
@@ -184,7 +184,7 @@ namespace {
                     {
                         auto kernel = cl::Kernel(program, "xgate");
                         kernel.setArg(0, num);
-                        kernel.setArg(1, 1 << op.target);
+                        kernel.setArg(1, (uint64_t)1 << op.target);
                         kernel.setArg(2, device_vec_re);
                         kernel.setArg(3, device_vec_im);
                         command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
@@ -194,7 +194,7 @@ namespace {
                     {
                         auto kernel = cl::Kernel(program, "zgate");
                         kernel.setArg(0, num);
-                        kernel.setArg(1, 1 << op.target);
+                        kernel.setArg(1, (uint64_t)1 << op.target);
                         kernel.setArg(2, device_vec_re);
                         kernel.setArg(3, device_vec_im);
                         command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
@@ -204,8 +204,8 @@ namespace {
                     {
                         auto kernel = cl::Kernel(program, "cxgate");
                         kernel.setArg(0, num);
-                        kernel.setArg(1, 1 << op.target);
-                        kernel.setArg(2, 1 << op.ctrl);
+                        kernel.setArg(1, (uint64_t)1 << op.target);
+                        kernel.setArg(2, (uint64_t)1 << op.ctrl);
                         kernel.setArg(3, device_vec_re);
                         kernel.setArg(4, device_vec_im);
                         command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
@@ -215,8 +215,8 @@ namespace {
                     {
                         auto kernel = cl::Kernel(program, "czgate");
                         kernel.setArg(0, num);
-                        kernel.setArg(1, 1 << op.target);
-                        kernel.setArg(2, 1 << op.ctrl);
+                        kernel.setArg(1, (uint64_t)1 << op.target);
+                        kernel.setArg(2, (uint64_t)1 << op.ctrl);
                         kernel.setArg(3, device_vec_re);
                         kernel.setArg(4, device_vec_im);
                         command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
@@ -228,7 +228,7 @@ namespace {
                     {
                         auto kernel = cl::Kernel(program, "p0_base8");
                         kernel.setArg(0, num);
-                        kernel.setArg(1, 1 << op.target);
+                        kernel.setArg(1, (uint64_t)1 << op.target);
                         kernel.setArg(2, device_vec_re);
                         kernel.setArg(3, device_vec_im);
                         kernel.setArg(4, device_p0);
@@ -243,7 +243,7 @@ namespace {
                             auto kernel = cl::Kernel(program, "collapse_to_0");
                             measured[op.target] = 0;
                             kernel.setArg(0, num);
-                            kernel.setArg(1, 1 << op.target);
+                            kernel.setArg(1, (uint64_t)1 << op.target);
                             kernel.setArg(2, device_vec_re);
                             kernel.setArg(3, device_vec_im);
                             kernel.setArg(4, op.phi);
@@ -253,7 +253,7 @@ namespace {
                             auto kernel = cl::Kernel(program, "collapse_to_1");
                             measured[op.target] = 1;
                             kernel.setArg(0, num);
-                            kernel.setArg(1, 1 << op.target);
+                            kernel.setArg(1, (uint64_t)1 << op.target);
                             kernel.setArg(2, device_vec_re);
                             kernel.setArg(3, device_vec_im);
                             kernel.setArg(4, op.phi);
@@ -272,12 +272,12 @@ namespace {
             std::cerr << "command_queue.flush() done" << std::endl;
             command_queue.finish();
             std::cerr << "command_queue.finish() done" << std::endl;
-
         } catch (const cl::Error& e) {
             std::stringstream msg;
             msg << "CL Error : " << e.what() << " " << e.err();
             throw std::runtime_error(msg.str());
         }
+        return measured;
     }
 
     /*
