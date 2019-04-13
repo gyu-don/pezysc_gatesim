@@ -30,7 +30,7 @@ enum Gate {
     M,
     M_VAL,
     P0,
-}
+};
 
 struct Params {
     int gate;
