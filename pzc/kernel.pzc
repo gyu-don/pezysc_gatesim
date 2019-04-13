@@ -197,13 +197,39 @@ void pzc_czgate(size_t num, uint64_t cmask, uint64_t tmask, double *vec_re, doub
     size_t gid = pid * get_maxtid() + tid;
     const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
 
-    size >>= 2;
+    num >>= 2;
 
     for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
         auto idx = get_idx11(cmask, tmask, i);
         vec_re[idx] *= -1;
         chgthread();
         vec_im[idx] *= -1;
+        chgthread();
+    }
+
+    flush();
+}
+
+void pzc_cxgate(size_t num, uint64_t cmask, uint64_t tmask, double *vec_re, double *vec_im)
+{
+    size_t pid = get_pid();
+    size_t tid = get_tid();
+    size_t gid = pid * get_maxtid() + tid;
+    const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
+
+    num >>= 2;
+
+    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+        auto idx10 = get_idx10(cmask, tmask, i);
+        auto idx11 = idx10 + tmask;
+
+        auto t = vec_re[idx10];
+        vec_re[idx10] = vec_re[idx11];
+        vec_re[idx11] = t;
+        chgthread();
+        auto u = vec_im[idx10];
+        vec_im[idx10] = vec_im[idx11];
+        vec_im[idx11] = u;
         chgthread();
     }
 

@@ -131,7 +131,7 @@ void pzcRun(size_t num, std::vector<double>& vec_re, std::vector<double>& vec_im
 	std::cerr << "write_event.wait() done" << std::endl;
 
 	//cl::Event event;
-	for(uint64_t mask = 1; mask < num; mask <<= 1) {
+	for(uint64_t mask = 1; mask < num; mask <<= 2) {
             // Create Kernel.
             // Give kernel name without pzc_ prefix.
             auto hgate = cl::Kernel(program, "hgate");
@@ -144,7 +144,23 @@ void pzcRun(size_t num, std::vector<double>& vec_re, std::vector<double>& vec_im
 
             // Run device kernel.
             //command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &event);
-            command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, nullptr);
+            cl::Event ev;
+            command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &ev);
+            ev.wait();
+            // Create Kernel.
+            // Give kernel name without pzc_ prefix.
+            auto cxgate = cl::Kernel(program, "cxgate");
+            // Set kernel args.
+            cxgate.setArg(0, num);
+            cxgate.setArg(1, mask);
+            cxgate.setArg(2, mask << 1);
+            cxgate.setArg(3, device_vec_re);
+            cxgate.setArg(4, device_vec_im);
+
+            // Run device kernel.
+            //command_queue.enqueueNDRangeKernel(hgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &event);
+            command_queue.enqueueNDRangeKernel(cxgate, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange, nullptr, &ev);
+            ev.wait();
         }
 
         // Waiting device completion.
