@@ -1,4 +1,10 @@
 /*!
+ * @author    gyu-don
+ * @date      2019
+ * @copyright BSD-3-Clause
+ */
+/*!
+ * Original code was developed by
  * @author    PEZY Computing, K.K.
  * @date      2019
  * @copyright BSD-3-Clause
