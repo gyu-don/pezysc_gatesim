@@ -41,7 +41,7 @@ struct Params {
     double phi;
     double theta;
     Params(int g, int t, int c = -1) : gate(g), target(t), ctrl(c) {}
-    Params(int g, int t, double theta = 0., double phi = 0., double lambda = 0.) : gate(g), target(t), theta(theta), phi(phi), lambda(lambda) {}
+    Params(int g, int t, double theta, double phi = 0., double lambda = 0.) : gate(g), target(t), theta(theta), phi(phi), lambda(lambda) {}
 };
 
 namespace {
@@ -104,8 +104,9 @@ namespace {
         return createProgram(context, devices, filename);
     }
 
-    void pzcRun(int n_qubits std::vector<double>& vec_re, std::vector<double>& vec_im, const std::vector<Params>& ops)
+    std::vector<int> pzcRun(int n_qubits, std::vector<double>& vec_re, std::vector<double>& vec_im, const std::vector<Params>& ops)
     {
+        auto measured(n_qubits);
         size_t num = 1 << n_qubits;
         try {
             // Get Platform
@@ -240,6 +241,7 @@ namespace {
                         }
                         if (params.phi < params.theta) {
                             auto kernel = cl::Kernel(program, "collapse_to_0");
+                            measured[op.target] = 0;
                             kernel.setArg(0, num);
                             kernel.setArg(1, 1 << op.target);
                             kernel.setArg(2, device_vec_re);
@@ -249,6 +251,7 @@ namespace {
                         }
                         else {
                             auto kernel = cl::Kernel(program, "collapse_to_1");
+                            measured[op.target] = 1;
                             kernel.setArg(0, num);
                             kernel.setArg(1, 1 << op.target);
                             kernel.setArg(2, device_vec_re);
