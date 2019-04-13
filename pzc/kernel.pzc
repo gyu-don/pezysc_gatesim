@@ -1,0 +1,27 @@
+/*!
+ * @author    PEZY Computing, K.K.
+ * @date      2019
+ * @copyright BSD-3-Clause
+ */
+
+#include <pzc_builtin.h>
+
+void pzc_add(size_t        num,
+             double*       dst,
+             const double* src0,
+             const double* src1)
+{
+    size_t       pid              = get_pid();
+    size_t       tid              = get_tid();
+    size_t       gid              = pid * get_maxtid() + tid;
+    const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
+
+    for (size_t i = gid; i < num; i += GLOBAL_WORK_SIZE) {
+        double s0 = src0[i];
+        double s1 = src1[i];
+        chgthread();
+        dst[i] = s0 + s1;
+    }
+
+    flush();
+}
