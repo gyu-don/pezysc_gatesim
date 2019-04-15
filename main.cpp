@@ -45,7 +45,7 @@ struct Params {
 };
 
 namespace {
-    std::mt19937 mt(1);
+    std::mt19937 mt(0);
     inline void  initVector(std::vector<double>& src_re, std::vector<double>& src_im)
     {
         for (auto& s : src_re) {
@@ -104,7 +104,7 @@ namespace {
         return createProgram(context, devices, filename);
     }
 
-    std::vector<int> pzcRun(int n_qubits, std::vector<Params>& ops)
+    std::vector<int> pzcRun(int n_qubits, std::vector<Params>& ops, std::vector<double>* host_re = nullptr, std::vector<double>* host_im = nullptr)
     {
         auto measured = std::vector<int>(n_qubits);
         size_t num = 1 << n_qubits;
@@ -168,7 +168,7 @@ namespace {
             kernel.setArg(2, device_vec_im);
             command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
 
-            for (auto op : ops) {
+            for (auto &op : ops) {
                 switch (op.gate) {
                     case H:
                     {
@@ -233,7 +233,6 @@ namespace {
                         kernel.setArg(3, device_vec_im);
                         kernel.setArg(4, device_p0);
                         command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
-                        op.phi = 1.2345;
                         command_queue.enqueueReadBuffer(device_p0, true, 0, sizeof(double), &op.phi);
                         std::cerr << "p0: " << op.phi << std::endl;
                         if (op.gate == P0) break;
@@ -242,8 +241,8 @@ namespace {
                             op.theta = rnd01(mt);
                         }
                         if (op.phi < op.theta) {
-                            auto kernel = cl::Kernel(program, "collapse_to_0");
-                            measured[op.target] = 0;
+                            auto kernel = cl::Kernel(program, "collapse_to_1");
+                            measured[op.target] = 1;
                             kernel.setArg(0, num);
                             kernel.setArg(1, (uint64_t)1 << op.target);
                             kernel.setArg(2, device_vec_re);
@@ -252,8 +251,8 @@ namespace {
                             command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
                         }
                         else {
-                            auto kernel = cl::Kernel(program, "collapse_to_1");
-                            measured[op.target] = 1;
+                            auto kernel = cl::Kernel(program, "collapse_to_0");
+                            measured[op.target] = 0;
                             kernel.setArg(0, num);
                             kernel.setArg(1, (uint64_t)1 << op.target);
                             kernel.setArg(2, device_vec_re);
@@ -266,8 +265,14 @@ namespace {
                 }
             }
             // Get dst.
-            //command_queue.enqueueReadBuffer(device_vec_re, true, 0, sizeof(double) * num, &vec_re[0]);
-            //command_queue.enqueueReadBuffer(device_vec_im, true, 0, sizeof(double) * num, &vec_im[0]);
+            if (host_re) {
+                host_re->resize(num);
+                command_queue.enqueueReadBuffer(device_vec_re, true, 0, sizeof(double) * num, host_re->data());
+            }
+            if (host_im) {
+                host_im->resize(num);
+                command_queue.enqueueReadBuffer(device_vec_im, true, 0, sizeof(double) * num, host_im->data());
+            }
 
             // Finish all commands.
             command_queue.flush();
@@ -331,7 +336,7 @@ namespace {
 
 int main(int argc, char** argv)
 {
-    size_t n_qubits = 10;
+    size_t n_qubits = 4;
 
     if (argc > 1) {
         n_qubits = strtol(argv[1], nullptr, 10);
@@ -340,19 +345,25 @@ int main(int argc, char** argv)
     std::cout << "n_qubits " << n_qubits << std::endl;
 
     std::vector<Params> ops;
-    ops.push_back(Params(X, 0));
-    ops.push_back(Params(X, 1));
-    ops.push_back(Params(M_VAL, 0, 0.5));
-    ops.push_back(Params(M_VAL, 1, 0.5));
+    ops.push_back(Params(H, 0));
+    ops.push_back(Params(H, 1));
+    ops.push_back(Params(M, 0));
+    ops.push_back(Params(M, 1));
 
-    // run device add
-    auto vec = pzcRun(n_qubits, ops);
+    std::vector<double> re, im;
+    auto vec = pzcRun(n_qubits, ops, &re, &im);
+    std::cout << "pzcRun: done" << std::endl;
+    for (int i = 0; i < (1 << n_qubits); i++) {
+        std::cout << i << "\t";
+        std::cout << re[i] << "\t";
+        std::cout << im[i] << std::endl;
+    }
     for (auto v : vec) {
         std::cout << v;
     }
     std::cout << std::endl;
     for (int i = 2; i < 4; i++) {
-	    std::cout << "rand: " << ops[i].theta << " p0: " << ops[i].phi << std::endl;
+	    std::cout << "op: " << i << " rand: " << ops[i].theta << " p0: " << ops[i].phi << std::endl;
     }
 
     /*

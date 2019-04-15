@@ -256,7 +256,7 @@ void pzc_cxgate(size_t num, uint64_t cmask, uint64_t tmask, double *vec_re, doub
     flush();
 }
 
-void pzc_p0_base8(size_t num, uint64_t mask, const double *vec_re, const double *vec_im, double *p0)
+void pzc_p0_base8(size_t num, uint64_t mask, double *vec_re, double *vec_im, double *p0)
 {
     size_t       pid              = get_pid();
     size_t       tid              = get_tid();
@@ -348,7 +348,7 @@ void pzc_collapse_to_1(size_t num, uint64_t mask, double *vec_re, double *vec_im
     size_t tid = get_tid();
     size_t gid = pid * get_maxtid() + tid;
     const size_t GLOBAL_WORK_SIZE = get_maxtid() * get_maxpid();
-    double factor = 1.0 / (1 - sqrt(p0));
+    double factor = 1.0 / sqrt(1 - p0);
 
     num >>= 1;
 
