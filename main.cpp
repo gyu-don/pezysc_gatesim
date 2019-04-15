@@ -234,7 +234,6 @@ namespace {
                         kernel.setArg(4, device_p0);
                         command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(global_work_size), cl::NullRange);
                         command_queue.enqueueReadBuffer(device_p0, true, 0, sizeof(double), &op.phi);
-                        std::cerr << "p0: " << op.phi << std::endl;
                         if (op.gate == P0) break;
                         if (op.gate == M) {
                             std::uniform_real_distribution<> rnd01(0.0, 1.0);
@@ -336,7 +335,7 @@ namespace {
 
 int main(int argc, char** argv)
 {
-    size_t n_qubits = 4;
+    size_t n_qubits = 30;
 
     if (argc > 1) {
         n_qubits = strtol(argv[1], nullptr, 10);
@@ -345,26 +344,29 @@ int main(int argc, char** argv)
     std::cout << "n_qubits " << n_qubits << std::endl;
 
     std::vector<Params> ops;
-    ops.push_back(Params(H, 0));
-    ops.push_back(Params(H, 1));
-    ops.push_back(Params(M, 0));
-    ops.push_back(Params(M, 1));
+    for (int i = 0; i < n_qubits; i+=2) {
+        ops.push_back(Params(H, i));
+        ops.push_back(Params(CX, i, i + 1));
+    }
+    for (int i = 0; i < n_qubits; i++) {
+        ops.push_back(Params(M, i));
+    }
 
     std::vector<double> re, im;
-    auto vec = pzcRun(n_qubits, ops, &re, &im);
+    bool dump_statevec = n_qubits < 5;
+    auto vec = pzcRun(n_qubits, ops, dump_statevec ? &re : nullptr, dump_statevec ? &im : nullptr);
     std::cout << "pzcRun: done" << std::endl;
-    for (int i = 0; i < (1 << n_qubits); i++) {
-        std::cout << i << "\t";
-        std::cout << re[i] << "\t";
-        std::cout << im[i] << std::endl;
+    if (dump_statevec) {
+        for (int i = 0; i < (1 << n_qubits); i++) {
+            std::cout << i << "\t";
+            std::cout << re[i] << "\t";
+            std::cout << im[i] << std::endl;
+        }
     }
     for (auto v : vec) {
         std::cout << v;
     }
     std::cout << std::endl;
-    for (int i = 2; i < 4; i++) {
-	    std::cout << "op: " << i << " rand: " << ops[i].theta << " p0: " << ops[i].phi << std::endl;
-    }
 
     /*
     for(size_t i=0; i < num; i++) {
